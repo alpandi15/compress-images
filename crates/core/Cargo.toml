@@ -1,0 +1,38 @@
+[package]
+name = "compress-core"
+description = "Image compression engine for Compress Images"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["heic", "avif-decode"]
+heic = ["dep:libheif-rs"]
+avif-decode = ["image/avif-native"]
+
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp", "tiff", "bmp"] }
+mozjpeg = "0.10.13"
+imagequant = { version = "4.4.1", default-features = false, features = ["threads"] }
+png = "0.18.1"
+oxipng = { version = "10.2.1", default-features = false, features = ["parallel"] }
+webp = { version = "0.3.1", default-features = false }
+ravif = "0.13.0"
+rgb = "0.8.50"
+tiff = "0.11.3"
+libheif-rs = { version = "3.0.0", optional = true, default-features = false, features = ["v1_17"] }
+fast_image_resize = { version = "6.1.0", features = ["image"] }
+rayon = "1.12.0"
+walkdir = "2.5.0"
+dunce = "1.0.5"
+tempfile.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+dunce = "1.0.5"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp", "tiff", "bmp"] }
+walkdir = "2.5.0"

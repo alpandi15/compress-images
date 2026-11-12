@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            features: ""
+          - os: ubuntu-24.04
+            features: ""
+          # HEIC/AVIF decode on Windows needs vcpkg-provided libheif/dav1d (SPEC §7.3, v0.4).
+          - os: windows-latest
+            features: "--no-default-features"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install native dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install nasm libheif dav1d pkg-config
+
+      - name: Install native dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev
+
+      - name: Install native dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: choco install nasm -y
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets ${{ matrix.features }} -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace ${{ matrix.features }}
+
+      - name: Test without native codecs
+        if: matrix.features == ''
+        run: cargo test --workspace --no-default-features
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev
+      - run: cargo check --workspace --all-targets

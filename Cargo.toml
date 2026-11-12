@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/OWNER/compress-images"
+rust-version = "1.88"
+
+[workspace.dependencies]
+compress-core = { path = "crates/core", default-features = false }
+anyhow = "1.0.104"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+tempfile = "3.27.0"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Codecs are painfully slow unoptimized; keep them fast even in debug/test builds.
+[profile.dev.package."*"]
+opt-level = 3
