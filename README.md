@@ -3,8 +3,17 @@
 Compress images one by one or whole folders at a time, on macOS, Windows and Linux.
 Results go into a `compressed/` folder. **Your originals are never touched.**
 
-> **Status:** v0.1, command-line tool. The desktop app and right-click integration are next
-> (see the [roadmap](docs/SPEC.md#8-roadmap--acceptance-criteria)).
+> **Status:** v0.2: command-line tool + desktop app (macOS, Windows, Linux). Right-click
+> integration is next (see the [roadmap](docs/SPEC.md#8-roadmap--acceptance-criteria)).
+
+## Desktop app
+
+Drop files or folders onto the window (or use *Add files* / *Add folder*), pick a preset, and
+press **Compress**. Settings are remembered. English and Indonesian UI.
+
+Launching the app with `--compress <paths>` opens a small progress window instead, which is
+what the right-click integration will use. Several launches within half a second are merged
+into one job.
 
 ## Features
 
@@ -49,8 +58,19 @@ brew install nasm pkg-config libheif dav1d
 # Ubuntu 24.04+
 sudo apt install build-essential nasm pkg-config libheif-dev libdav1d-dev
 
-cargo build --release            # binary: target/release/compress-images
-cargo build --release --no-default-features   # without HEIC/AVIF input support
+cargo build --release -p compress-images   # CLI: target/release/compress-images
+cargo build --release -p compress-images --no-default-features   # CLI without HEIC/AVIF input
+```
+
+Desktop app (additionally needs Node.js 22+ and pnpm; on Linux also
+`libwebkit2gtk-4.1-dev libxdo-dev libssl-dev librsvg2-dev`):
+
+```bash
+cd app
+pnpm install
+pnpm build                  # the Rust crate embeds app/dist, so build it before `cargo test --workspace`
+cargo tauri dev             # run with hot reload
+cargo tauri build           # installers in target/release/bundle/
 ```
 
 ## Contributing

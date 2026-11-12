@@ -32,17 +32,38 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
       - name: Install native dependencies (macOS)
         if: runner.os == 'macOS'
         run: brew install nasm libheif dav1d pkg-config
 
       - name: Install native dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev librsvg2-dev
 
       - name: Install native dependencies (Windows)
         if: runner.os == 'Windows'
         run: choco install nasm -y
+
+      # The Tauri crate embeds app/dist at compile time, so the frontend is built first.
+      - name: Frontend (install, type-check, build)
+        working-directory: app
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm build
 
       - name: Format
         run: cargo fmt --all --check
@@ -58,11 +79,23 @@ jobs:
         run: cargo test --workspace --no-default-features
 
   msrv:
-    name: MSRV (1.88)
+    name: MSRV (core + CLI 1.88, app 1.90)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88
+      - uses: dtolnay/rust-toolchain@1.90
       - uses: Swatinem/rust-cache@v2
-      - run: sudo apt-get update && sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev
-      - run: cargo check --workspace --all-targets
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev librsvg2-dev
+      - run: cd app && pnpm install --frozen-lockfile && pnpm build
+      - run: cargo +1.88 check -p compress-core -p compress-images --all-targets
+      - run: cargo +1.90 check -p compress-images-app --all-targets

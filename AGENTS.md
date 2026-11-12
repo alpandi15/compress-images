@@ -27,8 +27,8 @@ Operating guide for AI coding agents (and humans) working in this repository.
 ```
 crates/core/        compress-core — scan, detect, plan, decode, transform, encode, execute
 crates/cli/         compress-images — thin clap adapter over compress-core
-app/src-tauri/      Tauri v2 backend: commands, quick mode, single-instance, OS integrations
-app/ui/             Frontend (Vite + TypeScript)
+app/                Desktop app frontend (Svelte 5 + TypeScript + Vite): src/, package.json
+app/src-tauri/      Tauri v2 backend: commands, settings, job runner, quick mode, single-instance
 integrations/       Context-menu templates per OS (windows/, macos/, linux/)
 tests/fixtures/     Sample images for tests
 docs/SPEC.md        Product & technical spec (source of truth)
@@ -69,8 +69,12 @@ If `libheif`/`dav1d` are unavailable, build with `--no-default-features` (HEIC/A
 | Run CLI | `cargo run -p compress-images -- -q 70 <path>` |
 | Dry run | `cargo run -p compress-images -- --dry-run <path>` |
 | Regenerate fixtures | `cargo run -p compress-core --example gen_fixtures` (+ `heif-enc`, see `tests/fixtures/README.md`) |
-| Desktop dev (v0.2+) | `cd app && cargo tauri dev` |
-| Desktop bundle (v0.2+) | `cd app && cargo tauri build` |
+| Frontend deps (once) | `cd app && pnpm install` |
+| Frontend type-check | `cd app && pnpm check` |
+| Frontend build | `cd app && pnpm build` (**required before `cargo build/test --workspace`**: the Tauri crate embeds `app/dist` at compile time) |
+| Desktop dev | `cd app && cargo tauri dev` |
+| Desktop bundle | `cd app && cargo tauri build` (`--bundles app` for just the macOS `.app`) |
+| Quick mode by hand | `"target/release/bundle/macos/Compress Images.app/Contents/MacOS/compress-images-app" --compress <paths>` |
 
 Always run **fmt → clippy → test** before you declare a task done.
 
@@ -93,8 +97,11 @@ Always run **fmt → clippy → test** before you declare a task done.
 - Check licenses: the project is **GPL-3.0-only** (SPEC decision D-6). Every dependency must be GPL-3.0-compatible. Flag anything proprietary, GPL-2.0-only, or with an unclear license.
 
 ### Frontend (v0.2+)
-- TypeScript strict mode. All business logic lives in Rust; the UI only calls Tauri commands and renders events.
-- All user-facing strings go through the i18n layer (English + Indonesian). No hard-coded UI text.
+- Svelte 5 runes + TypeScript strict mode; `pnpm check` must pass with zero warnings.
+- All business logic lives in Rust; the UI only calls Tauri commands (`src/lib/api.ts`) and renders events (`src/lib/job.svelte.ts`). Keep the TS types in `api.ts` in sync with the Rust serde output.
+- All user-facing strings go through `t()` in `src/lib/i18n.svelte.ts` (English + Indonesian; the `id` dictionary is typed against `en`, so a missing key is a type error).
+- npm `@tauri-apps/*` packages must match the Rust crates' major.minor (`cargo tauri build` refuses mismatches). Bump both sides together.
+- MSRV: the app crate needs Rust 1.90 (Tauri); core and CLI stay at the workspace MSRV.
 
 ---
 

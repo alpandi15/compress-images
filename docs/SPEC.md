@@ -211,23 +211,31 @@ Human output lists each processed file with sizes; unsupported (non-image) files
 - Settings panel: preset + quality slider, output format, recursive toggle, resize, keep metadata, output folder name, conflict policy.
 - Progress: overall bar, per-file list with status and size savings, cancel button.
 - Result summary: `N files · 48.3 MB → 12.1 MB (−75 %)` with an **Open output folder** button.
-- Settings tab "Integrations": toggles to install/uninstall the context-menu integration for the current OS (see §5).
-- UI languages: English (default) and Indonesian.
+- Settings tab "Integrations": toggles to install/uninstall the context-menu integration for the current OS (see §5). *(v0.3)*
+- UI languages: English and Indonesian; "System" (default) picks Indonesian when the OS language starts with `id`.
+- Settings are saved automatically (debounced) as they change; invalid values (e.g. an output folder name with a slash) are flagged inline and not saved.
+- Only one job runs at a time across all windows of the app.
 
 ### 4.3 Quick mode (context-menu launch)
 
 - Triggered when the app binary receives paths as arguments: `<app> --compress <PATH>...`.
 - Uses the **last saved settings** from the GUI (no prompts).
-- Shows a small always-on-top window: progress bar, current file, cancel button; on finish shows the summary + "Open folder" and auto-closes after 10 s if not interacted with.
-- **Single-instance:** when the file manager launches the app once per selected item (Windows does this), additional instances forward their paths to the first instance, which merges arrivals within a 500 ms debounce window into **one job**. Use `tauri-plugin-single-instance`.
+- Shows a small always-on-top window (label `quick`): progress bar, current file, cancel button; on finish shows the summary + "Open folder" / "Open app" and auto-closes after 10 s unless the user interacts with it (any click or key press cancels the countdown).
+- If the main window is already running a job, the quick window waits and starts as soon as it is free.
+- Batches that arrive while a quick job runs are processed right after it, in the same window.
+- **Single-instance:** when the file manager launches the app once per selected item (Windows does this), additional instances forward their paths to the first instance, which merges arrivals within a 500 ms debounce window (reset by every arrival) into **one job**.
+  - Windows / Linux: `tauri-plugin-single-instance` (named mutex / D-Bus name, both atomic).
+  - macOS: own implementation (`app/src-tauri/src/mac_single_instance.rs`). The plugin's connect-then-bind check races when processes start at the same moment (observed: two primaries → two separate jobs). An exclusive file lock (`File::try_lock`) picks the primary atomically; secondaries retry connecting to its Unix socket for up to 5 s. Lock and socket live in the per-user temp dir.
 
 ### 4.4 Settings persistence
 
-- Stored as TOML in the OS-standard config dir (via the `directories` crate):
+- Stored as TOML in Tauri's app config dir (`app.path().app_config_dir()`), bundle id `io.github.alpandi15.compress-images`:
   - macOS: `~/Library/Application Support/<bundle-id>/config.toml`
   - Windows: `%APPDATA%\<bundle-id>\config.toml`
-  - Linux: `$XDG_CONFIG_HOME/compress-images/config.toml`
-- Unknown keys ignored; missing keys take defaults; invalid values fall back to defaults with a logged warning.
+  - Linux: `$XDG_CONFIG_HOME/<bundle-id>/config.toml` (usually `~/.config/…`)
+- Contents: `[options]` (the core `Options`), `preset` (`light` | `balanced` | `aggressive` | `custom`), `language` (`auto` | `en` | `id`). `custom` is stored explicitly because TOML cannot represent "no preset".
+- Unknown keys ignored; missing keys take defaults; each invalid value falls back to its default individually with a logged warning (one bad entry never resets the rest). If a named preset contradicts the stored quality (hand-edited file), the quality wins and the preset becomes `custom`.
+- Writes are atomic (temp file + rename).
 
 ---
 
@@ -290,9 +298,8 @@ compress-images/
 │   │       ├── event.rs       # progress events
 │   │       └── error.rs
 │   └── cli/                   # crate `compress-images` (binary)
-├── app/                       # Tauri v2 desktop app (v0.2+)
-│   ├── src-tauri/             # Rust side: commands, quick mode, single-instance, integrations
-│   └── ui/                    # frontend (Vite + TypeScript)
+├── app/                       # Tauri v2 desktop app: Svelte 5 + TS frontend (src/, package.json)
+│   └── src-tauri/             # Rust side: commands, settings, job runner, quick mode, single-instance
 ├── integrations/
 │   ├── windows/               # registry definitions (used by app + NSIS hooks)
 │   ├── macos/                 # Quick Action .workflow templates
@@ -428,8 +435,9 @@ No paid signing before v1.0. The README must document:
 **Done when:** `compress-images -q 70 -f same ./fixtures` produces correctly placed, decodable, smaller-or-kept outputs, and re-running is idempotent.
 
 ### v0.2 — Desktop GUI
-- [ ] Tauri v2 app using the core; GUI per §4.2; settings persistence per §4.4.
-- [ ] Quick mode + single-instance merging per §4.3.
+- [x] Tauri v2 app using the core; GUI per §4.2; settings persistence per §4.4.
+- [x] Quick mode + single-instance merging per §4.3. *(End-to-end verified on macOS: simultaneous launches merge into one job, the window auto-closes and the process exits. Windows/Linux rely on the plugin and are unverified until CI and a manual check.)*
+- [x] Closing a window while its job runs cancels the job cleanly first (no half-written temp files).
 
 ### v0.3 — Context-menu integration
 - [ ] Windows registry install/uninstall from the app; macOS Quick Action; Linux Nautilus/Dolphin/Nemo per §5.
@@ -476,9 +484,10 @@ No paid signing before v1.0. The README must document:
 | D-4 | HEIC decode-only, default output JPEG; BMP default output PNG | Accepted |
 | D-5 | Distribute unsigned via GitHub Releases until v1.0 | Accepted |
 | D-6 | Project licensed GPL-3.0-only (allows `imagequant` for lossy PNG) | Accepted (2026-11-12) |
-| D-7 | Frontend framework (proposed: Vite + TypeScript + Svelte) | **Proposed** |
+| D-7 | Frontend: Svelte 5 + TypeScript + Vite | Accepted (2026-11-12) |
 | D-9 | Same-format files claim output names before converted files (collision priority) | Accepted (2026-11-12) |
 | D-10 | Never-larger rule does not apply to resized images | Accepted (2026-11-12) |
-| D-8 | Bundle identifier (proposed: `io.github.<owner>.compress-images`) | **Open** — needs GitHub username |
+| D-8 | Bundle identifier `io.github.alpandi15.compress-images` | Accepted (2026-11-12) |
+| D-11 | Own single-instance implementation on macOS (plugin races on simultaneous launches) | Accepted (2026-11-12) |
 
 Larger decisions get an ADR in `docs/adr/NNNN-short-title.md` (Context · Decision · Consequences).

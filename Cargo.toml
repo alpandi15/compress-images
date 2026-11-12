@@ -1,12 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["crates/core", "crates/cli"]
+members = ["crates/core", "crates/cli", "app/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-only"
-repository = "https://github.com/OWNER/compress-images"
+repository = "https://github.com/alpandi15/compress-images"
 rust-version = "1.88"
 
 [workspace.dependencies]

@@ -1,0 +1,150 @@
+// Minimal i18n: English + Indonesian. Every user-facing string goes through `t()`.
+
+import type { Language } from "./api";
+
+const en = {
+  "app.title": "Compress Images",
+  "drop.title": "Drop images or folders here",
+  "drop.hint": "Subfolders are included. Results go to a “{folder}” folder; originals stay untouched.",
+  "drop.addFiles": "Add files",
+  "drop.addFolder": "Add folder",
+  "inputs.clear": "Clear",
+  "inputs.remove": "Remove",
+  "inputs.count": "{n} selected",
+  "action.compress": "Compress",
+  "action.cancel": "Cancel",
+  "action.openFolder": "Open folder",
+  "action.close": "Close",
+  "action.openApp": "Open app",
+  "settings.title": "Settings",
+  "settings.quality": "Quality",
+  "settings.preset.light": "Light",
+  "settings.preset.balanced": "Balanced",
+  "settings.preset.aggressive": "Aggressive",
+  "settings.preset.custom": "Custom",
+  "settings.qualityHint": "Lower = smaller files",
+  "settings.format": "Output format",
+  "settings.format.same": "Same as original",
+  "settings.recursive": "Include subfolders",
+  "settings.resize": "Max size (px)",
+  "settings.width": "Width",
+  "settings.height": "Height",
+  "settings.keepMetadata": "Keep metadata (EXIF, GPS)",
+  "settings.outDir": "Output folder name",
+  "settings.conflict": "If the file already exists",
+  "settings.conflict.overwrite": "Overwrite",
+  "settings.conflict.skip": "Skip",
+  "settings.conflict.rename": "Keep both",
+  "settings.language": "Language",
+  "settings.language.auto": "System",
+  "settings.invalid.out_dir_name": "Use a plain folder name (no slashes).",
+  "settings.invalid.resize": "Size must be at least 1 pixel.",
+  "settings.saveFailed": "Could not save settings: {error}",
+  "status.pending": "Waiting",
+  "status.working": "Compressing…",
+  "status.kept": "Already optimal, original copied",
+  "status.larger": "larger than source",
+  "skip.unsupported": "Not a supported image",
+  "skip.animated": "Animated image, skipped",
+  "skip.multi_page": "Multi-page TIFF, skipped",
+  "skip.exists": "Output exists, skipped",
+  "skip.cancelled": "Cancelled",
+  "progress.count": "{done} of {total}",
+  "summary.done": "Done",
+  "summary.cancelled": "Cancelled",
+  "summary.line": "{compressed} compressed · {before} → {after} ({percent})",
+  "summary.failed": "{n} failed",
+  "summary.skipped": "{n} skipped",
+  "summary.nothing": "No images to compress.",
+  "errors.input": "Can't read {path}: {error}",
+  "errors.start": "Could not start: {error}",
+  "quick.compressing": "Compressing {n} images…",
+  "quick.preparing": "Preparing…",
+  "quick.waiting": "Waiting for another job to finish…",
+  "quick.closingIn": "Closing in {s}s",
+  "empty.results": "Results will appear here.",
+} as const;
+
+export type MessageKey = keyof typeof en;
+
+const id: Record<MessageKey, string> = {
+  "app.title": "Compress Images",
+  "drop.title": "Letakkan gambar atau folder di sini",
+  "drop.hint": "Subfolder ikut diproses. Hasil masuk ke folder “{folder}”; file asli tidak diubah.",
+  "drop.addFiles": "Tambah file",
+  "drop.addFolder": "Tambah folder",
+  "inputs.clear": "Hapus semua",
+  "inputs.remove": "Hapus",
+  "inputs.count": "{n} dipilih",
+  "action.compress": "Kompres",
+  "action.cancel": "Batal",
+  "action.openFolder": "Buka folder",
+  "action.close": "Tutup",
+  "action.openApp": "Buka aplikasi",
+  "settings.title": "Pengaturan",
+  "settings.quality": "Kualitas",
+  "settings.preset.light": "Ringan",
+  "settings.preset.balanced": "Seimbang",
+  "settings.preset.aggressive": "Agresif",
+  "settings.preset.custom": "Kustom",
+  "settings.qualityHint": "Makin rendah = file makin kecil",
+  "settings.format": "Format output",
+  "settings.format.same": "Sama seperti asli",
+  "settings.recursive": "Ikut subfolder",
+  "settings.resize": "Ukuran maksimal (px)",
+  "settings.width": "Lebar",
+  "settings.height": "Tinggi",
+  "settings.keepMetadata": "Simpan metadata (EXIF, GPS)",
+  "settings.outDir": "Nama folder output",
+  "settings.conflict": "Jika file sudah ada",
+  "settings.conflict.overwrite": "Timpa",
+  "settings.conflict.skip": "Lewati",
+  "settings.conflict.rename": "Simpan keduanya",
+  "settings.language": "Bahasa",
+  "settings.language.auto": "Ikuti sistem",
+  "settings.invalid.out_dir_name": "Gunakan nama folder biasa (tanpa garis miring).",
+  "settings.invalid.resize": "Ukuran minimal 1 piksel.",
+  "settings.saveFailed": "Gagal menyimpan pengaturan: {error}",
+  "status.pending": "Menunggu",
+  "status.working": "Mengompres…",
+  "status.kept": "Sudah optimal, file asli disalin",
+  "status.larger": "lebih besar dari asli",
+  "skip.unsupported": "Bukan gambar yang didukung",
+  "skip.animated": "Gambar animasi, dilewati",
+  "skip.multi_page": "TIFF multi-halaman, dilewati",
+  "skip.exists": "Output sudah ada, dilewati",
+  "skip.cancelled": "Dibatalkan",
+  "progress.count": "{done} dari {total}",
+  "summary.done": "Selesai",
+  "summary.cancelled": "Dibatalkan",
+  "summary.line": "{compressed} terkompres · {before} → {after} ({percent})",
+  "summary.failed": "{n} gagal",
+  "summary.skipped": "{n} dilewati",
+  "summary.nothing": "Tidak ada gambar untuk dikompres.",
+  "errors.input": "Tidak bisa membaca {path}: {error}",
+  "errors.start": "Gagal memulai: {error}",
+  "quick.compressing": "Mengompres {n} gambar…",
+  "quick.preparing": "Menyiapkan…",
+  "quick.waiting": "Menunggu proses lain selesai…",
+  "quick.closingIn": "Tertutup dalam {s} dtk",
+  "empty.results": "Hasil akan muncul di sini.",
+};
+
+const dictionaries = { en, id } as const;
+
+export const i18n = $state({ lang: "en" as "en" | "id" });
+
+export function setLanguage(pref: Language): void {
+  if (pref === "auto") {
+    const sys = (navigator.languages?.[0] ?? navigator.language ?? "en").toLowerCase();
+    i18n.lang = sys.startsWith("id") || sys.startsWith("in") ? "id" : "en";
+  } else {
+    i18n.lang = pref;
+  }
+  document.documentElement.lang = i18n.lang;
+}
+
+export function t(key: MessageKey, params: Record<string, string | number> = {}): string {
+  const template: string = dictionaries[i18n.lang][key] ?? en[key];
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? `{${name}}`));
+}
