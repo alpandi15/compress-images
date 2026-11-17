@@ -53,10 +53,10 @@ Detection is by **file content (magic bytes)**, not by extension. A `.jpg` that 
 | JPEG (`.jpg`, `.jpeg`, `.jfif`) | ✅ | JPEG | CMYK JPEGs are converted to RGB. |
 | PNG | ✅ | PNG | APNG (animated) → skipped. |
 | WebP | ✅ | WebP | Animated WebP → skipped. |
-| AVIF | ✅ (feature `avif-decode`) | AVIF | Requires `dav1d`. Without the feature: reported as unsupported. |
+| AVIF | ✅ (feature `avif-decode`) | AVIF | macOS: system ImageIO (macOS 13+). Elsewhere: `dav1d`. Without the feature: reported as unsupported. |
 | TIFF (`.tif`, `.tiff`) | ✅ | TIFF (lossless deflate) | Multi-page TIFF → skipped. Quality setting does not apply to TIFF→TIFF. |
 | BMP | ✅ | **PNG** | BMP has no useful compression; BMP→BMP is never produced. |
-| HEIC / HEIF | ✅ (feature `heic`) | **JPEG** | Decode-only; HEIC is never an output format (patent/licensing). Requires `libheif`. |
+| HEIC / HEIF | ✅ (feature `heic`) | **JPEG** | Decode-only; HEIC is never an output format (patent/licensing). macOS: system ImageIO. Elsewhere: `libheif`. |
 | GIF, SVG, ICO, others | ❌ | — | Silently skipped with reason `unsupported`. |
 
 ### 3.2 Output formats
@@ -296,24 +296,26 @@ compress-images/
 │   │       ├── detect.rs      # magic-byte sniffing → ImageKind
 │   │       ├── scan.rs        # walk inputs, exclusions
 │   │       ├── plan.rs        # PURE: sources → destinations, collisions, dedup
-│   │       ├── decode/        # one module per input format
+│   │       ├── decode/        # raster (image crate), heic (libheif), imageio (macOS), heif_exif
 │   │       ├── encode/        # one module per output format
 │   │       ├── transform.rs   # orientation, resize, alpha flatten, bit depth
 │   │       ├── execute.rs     # parallel runner, atomic writes, cancellation
 │   │       ├── event.rs       # progress events
 │   │       └── error.rs
-│   └── cli/                   # crate `compress-images` (binary)
+│   ├── cli/                   # crate `compress-images` (binary)
+│   └── image-avif-native/     # empty helper crate: enables `image`'s dav1d AVIF decoder off macOS (§6.5)
 ├── app/                       # Tauri v2 desktop app: Svelte 5 + TS frontend (src/, package.json)
 │   └── src-tauri/             # Rust side: commands, settings, job runner, quick mode, single-instance
-├── integrations/
-│   ├── windows/               # registry definitions (used by app + NSIS hooks)
-│   ├── macos/                 # Quick Action .workflow templates
-│   └── linux/                 # nautilus / dolphin / nemo templates
+│       ├── src/integrations/  # context menu per OS (§5)
+│       └── windows/hooks.nsh  # generated NSIS hooks (registry entries)
 ├── tests/fixtures/            # small, license-clean sample images
+├── scripts/                   # maintenance scripts (third-party licenses)
+├── about.toml, about.hbs      # cargo-about config/template for THIRD_PARTY_LICENSES.html
 ├── docs/
 │   ├── SPEC.md                # this file
 │   └── adr/                   # architecture decision records (NNNN-title.md)
-└── .github/workflows/         # CI + release
+├── .github/workflows/         # CI + release
+└── .github/scripts/           # CI helpers (vcpkg setup on Windows)
 ```
 
 ### 6.2 Pipeline
@@ -364,8 +366,9 @@ The CLI and the Tauri app are thin adapters over this API. **The core must not d
 | PNG optimize | `oxipng` | — |
 | WebP encode/decode | `webp` / `libwebp-sys` | bundled |
 | AVIF encode | `ravif` | — (`nasm` for x86 asm) |
-| Decode (PNG/JPEG/TIFF/BMP/WebP, AVIF via feature) | `image` | `dav1d` for `avif-decode` |
-| HEIC decode | `libheif-rs` | system `libheif` (feature `heic`) |
+| Decode (PNG/JPEG/TIFF/BMP/WebP, AVIF via feature off macOS) | `image` | `dav1d` for `avif-decode` (not on macOS) |
+| HEIC decode (Windows, Linux) | `libheif-rs` | `libheif` + `libde265` (feature `heic`) |
+| HEIC + AVIF decode (macOS) | `objc2-image-io`, `objc2-core-graphics`, `objc2-core-foundation` | — (system ImageIO framework) |
 | Resize | `fast_image_resize` | — |
 | Parallelism | `rayon` | — |
 | Directory walk | `walkdir` | — |
@@ -380,10 +383,16 @@ The CLI and the Tauri app are thin adapters over this API. **The core must not d
 
 | Feature | Default | Enables |
 |---|---|---|
-| `heic` | on | HEIC/HEIF decoding via `libheif` |
-| `avif-decode` | on | AVIF decoding via `dav1d` |
+| `heic` | on | HEIC/HEIF decoding: ImageIO on macOS, `libheif` elsewhere |
+| `avif-decode` | on | AVIF decoding: ImageIO on macOS, `dav1d` (through `image`) elsewhere |
+| `heic-embedded` | off | `heic`, with libheif compiled from source and its decoders built in instead of loaded as plugins. Used for Linux release builds; no effect on macOS. |
+| `imageio` | (internal) | The macOS ImageIO backend, switched on by `heic`/`avif-decode` |
 
-Builds must succeed with `--no-default-features`; the disabled formats are then reported as `unsupported`.
+Builds must succeed with `--no-default-features`; the disabled formats are then reported as `unsupported`. The CLI and app crates forward `heic`, `avif-decode` and `heic-embedded`.
+
+Using the OS decoder on macOS (D-13) means the macOS build links no codec libraries at all, which is what makes an unsigned universal `.dmg` practical. Cargo can't enable a dependency feature for one target only, so `avif-native` is switched on through the empty `image-avif-native` crate, which compress-core depends on only off macOS.
+
+ImageIO hands back pixels without applying `irot`/`imir`; the backend applies the reported orientation itself. Exif is read from the container by `decode/heif_exif.rs`, which the AVIF path on other platforms uses as well.
 
 ---
 
@@ -393,8 +402,8 @@ Builds must succeed with `--no-default-features`; the disabled formats are then 
 
 - Xcode / Command Line Tools, Homebrew
 - Rust via **rustup** (not Homebrew), plus target `x86_64-apple-darwin` for universal builds
-- `brew install nasm libheif dav1d pkg-config cmake`
-- Minimum native versions: `libheif` ≥ 1.17 (API pinned via `libheif-rs` feature `v1_17`), `dav1d` ≥ 1.3.
+- `brew install nasm` (HEIC/AVIF use the system ImageIO framework; `libheif` from Homebrew is only needed for `heif-enc` when regenerating fixtures)
+- Windows/Linux minimum native versions: `libheif` ≥ 1.17 (API pinned via `libheif-rs` feature `v1_17`), `dav1d` ≥ 1.3.
 - MSRV: Rust 1.88 (required by `image` and `oxipng`).
 - Node.js LTS + pnpm (frontend), `cargo install tauri-cli --version "^2" --locked`
 
@@ -402,21 +411,23 @@ Builds must succeed with `--no-default-features`; the disabled formats are then 
 
 | OS | Artifacts |
 |---|---|
-| macOS | `.dmg` (universal: arm64 + x86_64) |
+| macOS | `.dmg` (universal: arm64 + x86_64), macOS 10.15+, ad-hoc signed |
 | Windows | NSIS `.exe` installer (per-user) + `.msi` |
 | Linux | `.deb` (Ubuntu 24.04+) + `.AppImage` |
 | All | standalone CLI binary in a `.tar.gz` / `.zip` |
 
 ### 7.3 CI (GitHub Actions)
 
-- **`ci.yml`** (push/PR): matrix `macos-latest`, `windows-latest`, `ubuntu-24.04` → `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --workspace`, plus a `--no-default-features` run. Ubuntu 24.04 is the oldest release whose `libheif`/`dav1d` packages meet the minimum versions. Until v0.4, the Windows job runs with `--no-default-features` (HEIC/AVIF decode off); wiring `vcpkg` for `libheif`/`dav1d` is part of the packaging milestone.
-- **`release.yml`** (tag `v*`): `tauri-apps/tauri-action` builds bundles and attaches them to a **draft** GitHub Release.
-- Native deps in CI: macOS via Homebrew, Ubuntu via `apt` (`libheif-dev libdav1d-dev nasm`), Windows via `vcpkg` (`libheif`, `dav1d`) from v0.4. Shared libraries must be bundled with the app (AppImage / app bundle / next to the `.exe`). `libheif-rs` also offers an `embedded-libheif` feature (builds libheif from source with CMake) as a fallback for bundling.
-- **Risk:** bundling `libheif`/`dav1d` on Windows and Linux. If it blocks a release, ship that platform with the features disabled and document it.
+- **`ci.yml`** (every push, PRs): matrix `macos-latest`, `windows-latest`, `ubuntu-24.04` → frontend check/build, `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --workspace`, a `--no-default-features` run, and on Linux a `heic-embedded` test run. Ubuntu 24.04 is the oldest release whose `libheif`/`dav1d` packages meet the minimum versions. An MSRV job checks core + CLI on 1.88 and the app on 1.90.
+- **`release.yml`** (tag `v*`): checks that the tag matches the workspace version (a `-suffix` marks a pre-release) and that `THIRD_PARTY_LICENSES.html` is current, creates a **draft** GitHub Release, then builds on each OS with `pnpm tauri build` and uploads the artifacts in §7.2 plus CLI archives. Each job fails if a binary depends on a codec library it doesn't ship (Homebrew paths on macOS, codec DLLs on Windows, the system `libheif` on Linux).
+- Native codec libraries per platform:
+  - **macOS:** none (ImageIO). Only `nasm` is installed.
+  - **Windows:** `libheif` and `dav1d` from the runner's `vcpkg`, triplet `x64-windows-static-md`, linked statically (`.github/scripts/vcpkg-windows.ps1`, cached between runs). vcpkg's `libheif` pulls in `libde265` and `x265`.
+  - **Linux:** `dav1d` and `libde265` from `apt`, dynamically linked (`.deb` depends on `libdav1d7` and `libde265-0`; the AppImage bundles them). `libheif` is compiled in (`heic-embedded`), because Ubuntu's `libheif` loads its HEVC decoder as a plugin that an AppImage can't carry. Building on 24.04 means the AppImage needs glibc 2.39+.
 
 ### 7.4 Unsigned distribution
 
-No paid signing before v1.0. The README must document:
+No paid signing before v1.0. The macOS app is ad-hoc signed (`signingIdentity: "-"`), which Apple Silicon requires to launch it at all. The README must document:
 - macOS: `xattr -dr com.apple.quarantine "/Applications/Compress Images.app"` or right-click → Open.
 - Windows: SmartScreen → "More info" → "Run anyway".
 
@@ -424,7 +435,8 @@ No paid signing before v1.0. The README must document:
 
 - Project license: **GPL-3.0-only** (decision D-6). Chosen so lossy PNG quantization via `imagequant` (GPL-3.0) can be used.
 - Third-party: `imagequant` (GPL-3.0), `libheif` (LGPL-3.0, dynamically linked), `dav1d` (BSD-2), `mozjpeg` (BSD/IJG), `libwebp` (BSD). All are compatible with GPL-3.0.
-- Ship a `THIRD_PARTY_LICENSES` file generated with `cargo-about` or `cargo-deny`.
+- `THIRD_PARTY_LICENSES.html` is generated with `cargo-about` (`scripts/third-party-licenses.sh`, config in `about.toml`, which also lists the accepted licenses). It is committed, attached to every release and included in the CLI archives; the release workflow fails if it is stale. Native C libraries are listed by hand in `about.hbs`.
+- The Windows build statically links vcpkg's `x265` (GPL-2.0-or-later, compatible with GPL-3.0) as part of `libheif`, although only decoding is used.
 
 ---
 
@@ -448,9 +460,11 @@ No paid signing before v1.0. The README must document:
 - [x] Windows registry install/uninstall from the app + NSIS hooks; macOS Quick Action; Linux Nautilus/Dolphin/Nemo per §5. *(Verified on macOS: generated plists lint clean and the workflow runs via `automator`, launching quick mode with every selected item as its own argument. The Finder menu was confirmed by hand (right-click → Quick Actions → Compress Images). Windows/Linux file managers still need a manual check.)*
 
 ### v0.4 — Packaging & polish
-- [ ] Release workflow producing all artifacts in §7.2.
-- [ ] README with screenshots, install and unsigned-app instructions; `THIRD_PARTY_LICENSES`.
-- [ ] Indonesian UI translation.
+- [x] Release workflow producing all artifacts in §7.2. *(macOS: universal build and Homebrew-free linkage verified locally. Windows/Linux: verified only through the release workflow on GitHub.)*
+- [x] macOS build decodes HEIC/AVIF with ImageIO, so it ships no codec libraries (D-13); Windows links libheif/dav1d statically, Linux compiles libheif in (D-14).
+- [ ] README screenshots. *(Install and unsigned-app instructions are done.)*
+- [x] `THIRD_PARTY_LICENSES.html` (cargo-about).
+- [x] Indonesian UI translation. *(Shipped with v0.2.)*
 
 ### v1.0
 - [ ] Windows 11 top-level context menu (`IExplorerCommand` + sparse package).
@@ -463,6 +477,10 @@ No paid signing before v1.0. The README must document:
 
 - Animated WebP/APNG, multi-page TIFF: skipped.
 - HEIC cannot be an output format.
+- macOS: AVIF input needs macOS 13 or newer (ImageIO); on older versions those files fail with a decode error.
+- AVIF `irot`/`imir` transforms are applied on macOS (ImageIO) but not by the `image` crate's AVIF decoder on Windows/Linux. HEIC transforms are applied everywhere.
+- macOS: HEIC/AVIF images with transparency go through premultiplied alpha, so nearly transparent pixels can lose a little color precision.
+- Linux AppImage: needs glibc 2.39+ (built on Ubuntu 24.04).
 - Windows 11: context menu under "Show more options" until v1.0.
 - `KeptOriginal` copies the source bytes as-is, so its metadata (including GPS) is kept even when `keep_metadata` is off.
 - Metadata support per output encoder:
@@ -495,5 +513,7 @@ No paid signing before v1.0. The README must document:
 | D-8 | Bundle identifier `io.github.alpandi15.compress-images` | Accepted (2026-11-12) |
 | D-11 | Own single-instance implementation on macOS (plugin races on simultaneous launches) | Accepted (2026-11-12) |
 | D-12 | NSIS installer registers the Windows context menu automatically; other platforms opt in from the GUI | Accepted (2026-11-12) |
+| D-13 | macOS decodes HEIC/AVIF with the system ImageIO framework instead of bundling libheif/dav1d | Accepted (2026-11-17) |
+| D-14 | Release codecs: Windows links libheif/dav1d statically (vcpkg); Linux compiles libheif in (`heic-embedded`) and links distro dav1d/libde265 | Accepted (2026-11-17) |
 
 Larger decisions get an ADR in `docs/adr/NNNN-short-title.md` (Context · Decision · Consequences).

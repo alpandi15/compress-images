@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
 env:
@@ -14,15 +14,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest
-            features: ""
-          - os: ubuntu-24.04
-            features: ""
-          # HEIC/AVIF decode on Windows needs vcpkg-provided libheif/dav1d (SPEC §7.3, v0.4).
-          - os: windows-latest
-            features: "--no-default-features"
+        os: [macos-latest, ubuntu-24.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg-cache
     steps:
       - uses: actions/checkout@v4
 
@@ -42,20 +37,33 @@ jobs:
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
 
+      # macOS decodes HEIC/AVIF with the system ImageIO framework: no codec libraries needed.
       - name: Install native dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install nasm libheif dav1d pkg-config
+        run: brew install nasm
 
       - name: Install native dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm pkg-config libheif-dev libdav1d-dev \
+          sudo apt-get install -y nasm pkg-config cmake libheif-dev libde265-dev libdav1d-dev \
             libwebkit2gtk-4.1-dev libxdo-dev libssl-dev librsvg2-dev
 
-      - name: Install native dependencies (Windows)
+      - name: Install nasm (Windows)
         if: runner.os == 'Windows'
         run: choco install nasm -y
+
+      - name: Cache vcpkg packages (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ hashFiles('.github/scripts/vcpkg-windows.ps1') }}
+
+      - name: libheif + dav1d via vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .github/scripts/vcpkg-windows.ps1
 
       # The Tauri crate embeds app/dist at compile time, so the frontend is built first.
       - name: Frontend (install, type-check, build)
@@ -69,14 +77,18 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets ${{ matrix.features }} -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test --workspace ${{ matrix.features }}
+        run: cargo test --workspace
 
       - name: Test without native codecs
-        if: matrix.features == ''
         run: cargo test --workspace --no-default-features
+
+      # Release builds on Linux compile libheif in (see release.yml); test that variant too.
+      - name: Test with embedded libheif (Linux)
+        if: runner.os == 'Linux'
+        run: cargo test -p compress-core --features heic-embedded
 
   msrv:
     name: MSRV (core + CLI 1.88, app 1.90)

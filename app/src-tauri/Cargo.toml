@@ -11,6 +11,7 @@ rust-version = "1.90" # Tauri 2.12 requires 1.90; core and CLI stay at the works
 default = ["heic", "avif-decode"]
 heic = ["compress-core/heic"]
 avif-decode = ["compress-core/avif-decode"]
+heic-embedded = ["compress-core/heic-embedded"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.4", features = [] }

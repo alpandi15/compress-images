@@ -1,0 +1,227 @@
+# Builds every artifact in SPEC §7.2 for a `v*` tag and attaches them to a *draft* GitHub
+# Release. Publishing the draft is a manual step.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match the workspace version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "${tag%%-*}" != "$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match workspace version $version"
+            exit 1
+          fi
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.3
+
+      - name: THIRD_PARTY_LICENSES.html must be up to date
+        run: |
+          scripts/third-party-licenses.sh
+          git diff --exit-code THIRD_PARTY_LICENSES.html || {
+            echo "::error::THIRD_PARTY_LICENSES.html is stale; run scripts/third-party-licenses.sh"
+            exit 1
+          }
+
+      - name: Create draft release
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then exit 0; fi
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" --draft $prerelease --verify-tag \
+            --title "Compress Images $GITHUB_REF_NAME" --notes-file .github/release-notes.md
+          gh release upload "$GITHUB_REF_NAME" THIRD_PARTY_LICENSES.html
+
+  macos:
+    name: macOS (universal)
+    needs: draft
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      # HEIC/AVIF use the system ImageIO framework, so only build tools are needed.
+      - run: brew install nasm
+
+      - name: Desktop app (.dmg)
+        working-directory: app
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm tauri build --target universal-apple-darwin --bundles app,dmg
+
+      - name: CLI (universal binary)
+        run: |
+          cargo build --release --locked -p compress-images --target aarch64-apple-darwin
+          cargo build --release --locked -p compress-images --target x86_64-apple-darwin
+          mkdir -p dist
+          lipo -create -output dist/compress-images \
+            target/aarch64-apple-darwin/release/compress-images \
+            target/x86_64-apple-darwin/release/compress-images
+
+      - name: Binaries must not link Homebrew libraries
+        run: |
+          app="target/universal-apple-darwin/release/bundle/macos/Compress Images.app/Contents/MacOS/compress-images-app"
+          for bin in "$app" dist/compress-images; do
+            lipo -archs "$bin"
+            if otool -L "$bin" | grep -E '/opt/homebrew|/usr/local'; then
+              echo "::error::$bin links a non-system library"; exit 1
+            fi
+          done
+
+      - name: Smoke test (HEIC/AVIF through the CLI)
+        run: .github/scripts/smoke-test.sh dist/compress-images
+
+      - name: Upload
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cp README.md LICENSE THIRD_PARTY_LICENSES.html dist/
+          tar -C dist -czf "compress-images-cli-$version-macos-universal.tar.gz" .
+          dmg=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          cp "$dmg" "Compress-Images-$version-macos-universal.dmg"
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            "Compress-Images-$version-macos-universal.dmg" \
+            "compress-images-cli-$version-macos-universal.tar.gz"
+
+  windows:
+    name: Windows (x64)
+    needs: draft
+    runs-on: windows-latest
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - run: choco install nasm -y
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ hashFiles('.github/scripts/vcpkg-windows.ps1') }}
+      - name: libheif + dav1d (static, vcpkg)
+        shell: pwsh
+        run: .github/scripts/vcpkg-windows.ps1
+
+      - name: Desktop app (NSIS + MSI)
+        working-directory: app
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm tauri build --bundles nsis,msi
+
+      - name: CLI
+        run: cargo build --release --locked -p compress-images
+
+      # A missing DLL would stop the CLI from starting; this also proves HEIC/AVIF decoding.
+      - name: Smoke test (HEIC/AVIF through the CLI)
+        shell: bash
+        run: .github/scripts/smoke-test.sh target/release/compress-images.exe
+
+      - name: Upload
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir dist
+          cp target/release/compress-images.exe README.md LICENSE THIRD_PARTY_LICENSES.html dist/
+          (cd dist && 7z a "../compress-images-cli-$version-windows-x64.zip" .)
+          cp target/release/bundle/nsis/*-setup.exe "Compress-Images-$version-windows-x64-setup.exe"
+          cp target/release/bundle/msi/*.msi "Compress-Images-$version-windows-x64.msi"
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            "Compress-Images-$version-windows-x64-setup.exe" \
+            "Compress-Images-$version-windows-x64.msi" \
+            "compress-images-cli-$version-windows-x64.zip"
+
+  linux:
+    name: Linux (x86_64)
+    needs: draft
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      # libheif is compiled in (`heic-embedded`) with libde265 linked directly, because the
+      # distro libheif loads its HEVC decoder as a plugin that an AppImage can't carry.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm pkg-config cmake libde265-dev libdav1d-dev \
+            libwebkit2gtk-4.1-dev libxdo-dev libssl-dev librsvg2-dev patchelf file
+
+      - name: Desktop app (.deb + AppImage)
+        working-directory: app
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm tauri build --bundles deb,appimage --features heic-embedded
+
+      - name: CLI
+        run: cargo build --release --locked -p compress-images --features heic-embedded
+
+      - name: Shared libraries (must match bundle.linux.deb.depends)
+        run: |
+          for bin in target/release/compress-images-app target/release/compress-images; do
+            echo "== $bin"
+            ldd "$bin" | awk '/=>/ {print $3}' | xargs -r dpkg -S 2>/dev/null | cut -d: -f1 | sort -u
+            if ldd "$bin" | grep -q libheif; then
+              echo "::error::$bin links the system libheif"; exit 1
+            fi
+          done
+
+      - name: Smoke test (HEIC/AVIF through the CLI)
+        run: .github/scripts/smoke-test.sh target/release/compress-images
+
+      - name: Upload
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir dist
+          cp target/release/compress-images README.md LICENSE THIRD_PARTY_LICENSES.html dist/
+          tar -C dist -czf "compress-images-cli-$version-linux-x86_64.tar.gz" .
+          cp target/release/bundle/deb/*.deb "compress-images_${version}_amd64.deb"
+          cp target/release/bundle/appimage/*.AppImage "Compress-Images-$version-x86_64.AppImage"
+          gh release upload "$GITHUB_REF_NAME" --clobber \
+            "compress-images_${version}_amd64.deb" \
+            "Compress-Images-$version-x86_64.AppImage" \
+            "compress-images-cli-$version-linux-x86_64.tar.gz"

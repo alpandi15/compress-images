@@ -3,8 +3,30 @@
 Compress images one by one or whole folders at a time, on macOS, Windows and Linux.
 Results go into a `compressed/` folder. **Your originals are never touched.**
 
-> **Status:** v0.3: command-line tool, desktop app and right-click menu (macOS, Windows,
-> Linux). Prebuilt downloads are next (see the [roadmap](docs/SPEC.md#8-roadmap--acceptance-criteria)).
+> **Status:** v0.4: desktop app, right-click menu and command-line tool for macOS, Windows
+> and Linux. See the [roadmap](docs/SPEC.md#8-roadmap--acceptance-criteria).
+
+## Download
+
+Get the latest version from the [Releases page](https://github.com/alpandi15/compress-images/releases).
+
+| System | File |
+|---|---|
+| macOS 10.15+ (Apple Silicon and Intel) | `Compress-Images-<version>-macos-universal.dmg` |
+| Windows 10/11 (x64) | `…-windows-x64-setup.exe` (recommended) or `…-windows-x64.msi` |
+| Ubuntu 24.04+ / Debian 13+ | `compress-images_<version>_amd64.deb` |
+| Other Linux (x86_64, glibc 2.39+) | `Compress-Images-<version>-x86_64.AppImage` |
+| Command line only | `compress-images-cli-<version>-<system>.tar.gz` / `.zip` |
+
+The app isn't signed with a paid certificate yet, so your system will warn the first time:
+
+- **macOS:** copy the app to *Applications*, then right-click it → **Open** → **Open**. If macOS
+  says the app "is damaged and can't be opened", run this once in Terminal:
+  `xattr -dr com.apple.quarantine "/Applications/Compress Images.app"`
+- **Windows:** if SmartScreen says "Windows protected your PC", click **More info** → **Run anyway**.
+- **Linux (AppImage):** `chmod +x Compress-Images-*.AppImage`, then run it.
+
+HEIC/AVIF input: on macOS the system decoder is used (AVIF needs macOS 13+).
 
 ## Desktop app
 
@@ -59,12 +81,12 @@ Holiday/
 
 ## Building from source
 
-Requirements: Rust 1.88+ (via [rustup](https://rustup.rs)), `nasm`, `pkg-config`, and for HEIC/AVIF
-input `libheif` ≥ 1.17 and `dav1d` ≥ 1.3.
+Requirements: Rust 1.88+ (via [rustup](https://rustup.rs)) and `nasm`. On Windows and Linux, HEIC/AVIF
+input also needs `pkg-config`, `libheif` ≥ 1.17 and `dav1d` ≥ 1.3; macOS uses the system decoder.
 
 ```bash
 # macOS
-brew install nasm pkg-config libheif dav1d
+brew install nasm
 # Ubuntu 24.04+
 sudo apt install build-essential nasm pkg-config libheif-dev libdav1d-dev
 
@@ -81,7 +103,12 @@ pnpm install
 pnpm build                  # the Rust crate embeds app/dist, so build it before `cargo test --workspace`
 cargo tauri dev             # run with hot reload
 cargo tauri build           # installers in target/release/bundle/
+cargo tauri build --target universal-apple-darwin   # macOS: one app for Apple Silicon + Intel
 ```
+
+Windows needs `libheif`/`dav1d` from vcpkg (triplet `x64-windows-static-md`); see
+[`.github/scripts/vcpkg-windows.ps1`](.github/scripts/vcpkg-windows.ps1). Release builds are
+produced by [`.github/workflows/release.yml`](.github/workflows/release.yml) when a `v*` tag is pushed.
 
 ## Contributing
 
@@ -92,4 +119,6 @@ Read [AGENTS.md](AGENTS.md) (workflow, rules, commands) and [docs/SPEC.md](docs/
 ## License
 
 [GPL-3.0-only](LICENSE). Uses [libimagequant](https://pngquant.org/lib/) (GPL-3.0),
-mozjpeg, libwebp, rav1e, dav1d and libheif (LGPL-3.0, dynamically linked).
+mozjpeg, libwebp, rav1e, and on Windows/Linux libheif and libde265 (LGPL-3.0) and dav1d. The full list
+with license texts is in [THIRD_PARTY_LICENSES.html](THIRD_PARTY_LICENSES.html), which is also
+attached to every release.

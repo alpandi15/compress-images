@@ -41,10 +41,22 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": "-"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",
         "installerHooks": "windows/hooks.nsh"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libde265-0",
+          "libdav1d7"
+        ]
       }
     }
   }

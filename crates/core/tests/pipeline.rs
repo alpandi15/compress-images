@@ -51,6 +51,24 @@ fn snapshot(root: &Path, include_output: bool) -> BTreeMap<PathBuf, Vec<u8>> {
     out
 }
 
+/// Dimensions of `file` as decoded by compress-core itself (by converting a copy to PNG).
+/// Used for AVIF, which the `image` dev-dependency can't decode on macOS (ImageIO backend).
+#[allow(dead_code)] // unused when AVIF decoding is disabled
+fn decode_with_core(file: &Path) -> (u32, u32) {
+    let dir = tempfile::tempdir().unwrap();
+    let copy = dir.path().join(file.file_name().unwrap());
+    fs::copy(file, &copy).unwrap();
+    let opts = Options {
+        output_format: OutputFormat::Png,
+        ..Options::default()
+    };
+    let r = run(dir.path(), std::slice::from_ref(&copy), &opts);
+    let name = copy.file_name().unwrap().to_string_lossy().into_owned();
+    assert_produced(&r, &name);
+    let dst = dest_of(&r, &name);
+    image::open(dir.path().join(dst)).unwrap().dimensions()
+}
+
 struct Run {
     summary: Summary,
     /// source file name (relative to root) → (destination relative to root, outcome)
@@ -145,7 +163,10 @@ fn compresses_whole_folder_and_never_touches_originals() {
     #[cfg(feature = "avif-decode")]
     {
         assert_produced(&r, "photo.avif");
-        image::open(root.join("compressed/photo.avif")).unwrap();
+        assert_eq!(
+            decode_with_core(&root.join("compressed/photo.avif")),
+            (200, 150)
+        );
     }
 
     let skipped = |src: &str| match &r.done[src].1 {
@@ -294,6 +315,10 @@ fn converts_to_every_output_format() {
                 _ => compress_core::ImageKind::Avif,
             })
         );
+        #[cfg(feature = "avif-decode")]
+        if fmt == OutputFormat::Avif {
+            assert_eq!(decode_with_core(&root.join(&dst)), (200, 150));
+        }
     }
 }
 
@@ -430,4 +455,16 @@ fn heic_decodes_to_jpeg() {
     assert_eq!(dest_of(&r, "photo.heic"), "compressed/photo.jpg");
     let img = image::open(root.join("compressed/photo.jpg")).unwrap();
     assert_eq!(img.dimensions(), (200, 150));
+}
+
+/// `irot` must be applied exactly once (libheif applies it, ImageIO reports it).
+#[cfg(feature = "heic")]
+#[test]
+fn heic_rotation_is_applied() {
+    let ws = workspace();
+    let root = ws.path();
+    let r = run(root, &[root.join("rotated.heic")], &Options::default());
+    assert_produced(&r, "rotated.heic");
+    let img = image::open(root.join(dest_of(&r, "rotated.heic"))).unwrap();
+    assert_eq!(img.dimensions(), (150, 200));
 }

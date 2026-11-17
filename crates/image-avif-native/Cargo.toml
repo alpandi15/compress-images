@@ -1,0 +1,15 @@
+[package]
+name = "image-avif-native"
+description = "Build helper: turns on the dav1d-based AVIF decoder of `image` (non-macOS only)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Cargo can't enable a feature of a dependency for some targets only, nor list the same crate
+# twice under different names. Depending on this crate from a `cfg(not(target_os = "macos"))`
+# table does the job: feature unification switches `avif-native` on for the shared `image`.
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["avif-native"] }

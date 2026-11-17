@@ -5,7 +5,7 @@ use image::metadata::Orientation;
 use image::{DynamicImage, RgbImage, RgbaImage};
 use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
 
-use super::Decoded;
+use super::{heif_exif, Decoded};
 use crate::error::{CoreError, Result};
 
 pub fn decode(data: &[u8]) -> Result<Decoded> {
@@ -49,17 +49,11 @@ pub fn decode(data: &[u8]) -> Result<Decoded> {
         .all_metadata()
         .into_iter()
         .find(|m| m.item_type.0 == *b"Exif")
-        .and_then(|m| exif_tiff_payload(&m.raw_data))
+        .and_then(|m| heif_exif::tiff_payload(&m.raw_data))
         .map(|mut tiff| {
             let _ = Orientation::remove_from_exif_chunk(&mut tiff);
             tiff
         });
 
     Ok(Decoded { image, icc, exif })
-}
-
-/// HEIF Exif items start with a 4-byte big-endian offset to the TIFF header.
-fn exif_tiff_payload(raw: &[u8]) -> Option<Vec<u8>> {
-    let off = u32::from_be_bytes(raw.get(0..4)?.try_into().ok()?) as usize;
-    raw.get(4usize.checked_add(off)?..).map(<[u8]>::to_vec)
 }

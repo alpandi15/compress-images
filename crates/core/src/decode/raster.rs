@@ -33,6 +33,10 @@ pub fn decode(kind: ImageKind, data: &[u8]) -> Result<Decoded> {
     // Metadata is best-effort: a broken Exif block must not prevent compressing the pixels.
     let icc = decoder.icc_profile().ok().flatten();
     let mut exif = decoder.exif_metadata().ok().flatten();
+    if exif.is_none() && kind == ImageKind::Avif {
+        // `image`'s AVIF decoder doesn't expose Exif; read it from the container.
+        exif = super::heif_exif::extract(data);
+    }
     let orientation = decoder.orientation().unwrap_or(Orientation::NoTransforms);
 
     let mut image = DynamicImage::from_decoder(decoder).map_err(CoreError::decode)?;

@@ -11,6 +11,7 @@ rust-version.workspace = true
 default = ["heic", "avif-decode"]
 heic = ["compress-core/heic"]
 avif-decode = ["compress-core/avif-decode"]
+heic-embedded = ["compress-core/heic-embedded"]
 
 [dependencies]
 compress-core.workspace = true

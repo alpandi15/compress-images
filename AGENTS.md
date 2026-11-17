@@ -27,13 +27,15 @@ Operating guide for AI coding agents (and humans) working in this repository.
 ```
 crates/core/        compress-core — scan, detect, plan, decode, transform, encode, execute
 crates/cli/         compress-images — thin clap adapter over compress-core
+crates/image-avif-native/  Empty helper crate that enables image's dav1d AVIF decoder off macOS
 app/                Desktop app frontend (Svelte 5 + TypeScript + Vite): src/, package.json
-app/src-tauri/      Tauri v2 backend: commands, settings, job runner, quick mode, single-instance
-integrations/       Context-menu templates per OS (windows/, macos/, linux/)
+app/src-tauri/      Tauri v2 backend: commands, settings, job runner, quick mode, single-instance,
+                    context-menu integrations (src/integrations/, windows/hooks.nsh)
 tests/fixtures/     Sample images for tests
+scripts/            Maintenance scripts (third-party-licenses.sh)
 docs/SPEC.md        Product & technical spec (source of truth)
 docs/adr/           Architecture Decision Records
-.github/workflows/  CI (ci.yml) and releases (release.yml)
+.github/workflows/  CI (ci.yml) and releases (release.yml); helpers in .github/scripts/
 ```
 
 Some directories don't exist yet. Follow the roadmap in SPEC §8; don't scaffold later milestones early.
@@ -45,12 +47,14 @@ Some directories don't exist yet. Follow the roadmap in SPEC §8; don't scaffold
 ```bash
 # Rust must come from rustup, NOT Homebrew
 rustup target add x86_64-apple-darwin
-brew install nasm libheif dav1d pkg-config cmake
-cargo install tauri-cli --version "^2" --locked   # only needed from v0.2
+brew install nasm                    # HEIC/AVIF use macOS ImageIO: no codec libraries needed
+brew install libheif                 # optional: only for heif-enc when regenerating fixtures
+cargo install tauri-cli --version "^2" --locked
+cargo install cargo-about --features cli --locked   # only to regenerate THIRD_PARTY_LICENSES.html
 ```
 
-Linux (Ubuntu 24.04+; older releases ship a too-old libheif/dav1d): `sudo apt install build-essential nasm pkg-config libheif-dev libdav1d-dev` (+ Tauri's WebKitGTK deps from v0.2).
-Windows: MSVC Build Tools, `nasm`, and `vcpkg install libheif dav1d`.
+Linux (Ubuntu 24.04+; older releases ship a too-old libheif/dav1d): `sudo apt install build-essential nasm pkg-config libheif-dev libdav1d-dev` plus Tauri's WebKitGTK deps (`libwebkit2gtk-4.1-dev libxdo-dev libssl-dev librsvg2-dev`). For the `heic-embedded` feature, also `cmake libde265-dev`.
+Windows: MSVC Build Tools, `nasm`, `pkg-config`, and vcpkg with triplet `x64-windows-static-md` (`vcpkg install libheif dav1d`). See `.github/scripts/vcpkg-windows.ps1` for the environment variables.
 
 If `libheif`/`dav1d` are unavailable, build with `--no-default-features` (HEIC/AVIF decode disabled).
 
@@ -70,7 +74,10 @@ If `libheif`/`dav1d` are unavailable, build with `--no-default-features` (HEIC/A
 | Dry run | `cargo run -p compress-images -- --dry-run <path>` |
 | Regenerate NSIS hooks | `cargo test -p compress-images-app -- --ignored regenerate_nsis_hooks` (after changing Windows registry entries) |
 | Export Quick Action for a manual test | `WORKFLOW_OUT=<dir> WORKFLOW_LAUNCHER=<exe> cargo test -p compress-images-app -- --ignored export_workflow`, then `automator -i <file> "<dir>/Compress Images.workflow"` |
-| Regenerate fixtures | `cargo run -p compress-core --example gen_fixtures` (+ `heif-enc`, see `tests/fixtures/README.md`) |
+| Regenerate fixtures | `cargo run -p compress-core --example gen_fixtures` (+ `heif-enc` and a Swift script, see `tests/fixtures/README.md`) |
+| Regenerate third-party licenses | `scripts/third-party-licenses.sh` (after any dependency change; the release workflow fails if stale) |
+| Universal macOS build | `cd app && cargo tauri build --target universal-apple-darwin --bundles app,dmg` |
+| Release | Bump `version` in the root `Cargo.toml` (and `app/package.json`), merge to `main`, push tag `vX.Y.Z` (or `vX.Y.Z-rc.N`), then review and publish the draft release |
 | Frontend deps (once) | `cd app && pnpm install` |
 | Frontend type-check | `cd app && pnpm check` |
 | Frontend build | `cd app && pnpm build` (**required before `cargo build/test --workspace`**: the Tauri crate embeds `app/dist` at compile time) |
@@ -87,7 +94,7 @@ Always run **fmt → clippy → test** before you declare a task done.
 ### Rust
 - Edition 2021, stable toolchain; MSRV is pinned in the workspace `Cargo.toml` (`rust-version`, currently 1.88). Re-check it when bumping dependencies.
 - Errors: `thiserror` enums in `compress-core`; `anyhow` only in binaries (`cli`, `app`). No `unwrap()`/`expect()` on fallible runtime paths. They're allowed in tests and for true invariants (with a comment explaining why).
-- Decoders live in `decode/` per backend (`raster.rs` = everything the `image` crate decodes, `heic.rs` = libheif); encoders live in `encode/`, one module per output format. Adding a format means: detect → decode → (encode) → plan mapping → tests → SPEC §3.1 update.
+- Decoders live in `decode/` per backend (`raster.rs` = everything the `image` crate decodes, `heic.rs` = libheif on Windows/Linux, `imageio.rs` = HEIC/AVIF on macOS, `heif_exif.rs` = Exif from HEIF/AVIF containers); encoders live in `encode/`, one module per output format. Adding a format means: detect → decode → (encode) → plan mapping → tests → SPEC §3.1 update.
 - Native codecs (mozjpeg in particular) report errors by panicking. Keep them behind `catch_unwind` (see `encode/jpeg.rs` and `execute.rs`), and never build with `panic = "abort"`.
 - Platform-specific code goes behind `#[cfg(target_os = "...")]` and lives in clearly named modules (`integrations/windows.rs`, etc.). Shared logic stays platform-neutral.
 - Public items in `compress-core` get doc comments. Explain *why*, not *what*.

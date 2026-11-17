@@ -9,6 +9,9 @@ Regenerate from the workspace root:
 ```bash
 cargo run -p compress-core --example gen_fixtures
 heif-enc -q 90 -o tests/fixtures/photo.heic tests/fixtures/photo.png   # from Homebrew libheif
+# macOS only: HEIC with an `irot` rotation, written by the system ImageIO encoder
+swiftc -O crates/core/examples/heic_rotated.swift -o /tmp/heic_rotated
+/tmp/heic_rotated tests/fixtures/photo.png tests/fixtures/rotated.heic 6
 ```
 
 | File | What it tests |
@@ -20,6 +23,7 @@ heif-enc -q 90 -o tests/fixtures/photo.heic tests/fixtures/photo.png   # from Ho
 | `photo.webp` | Lossy WebP. |
 | `photo.avif` | AVIF (needs the `avif-decode` feature). |
 | `photo.heic` | HEIC (needs the `heic` feature). Default output is JPEG (`photo-heic.jpg`). |
+| `rotated.heic` | 200×150 pixels with an `irot` box (orientation 6) and a small Exif block. Output must be 150×200, and Exif must be found in the container. |
 | `alpha.png` | RGBA with a fully transparent corner. Alpha handling and flattening to white for JPEG. |
 | `gray.png` | 8-bit grayscale. |
 | `rotated.jpg` | 200×100 pixels with Exif orientation 6. Output must be 100×200. |

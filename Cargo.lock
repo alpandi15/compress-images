@@ -770,6 +770,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "cmake"
+version = "0.1.58"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f78a02292a74a88ac736019ab962ece0bc380e3f977bf72e376c5d78ff0678"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -787,14 +796,18 @@ dependencies = [
 
 [[package]]
 name = "compress-core"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "dunce",
  "fast_image_resize",
  "image",
+ "image-avif-native",
  "imagequant",
  "libheif-rs",
  "mozjpeg",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+ "objc2-image-io",
  "oxipng",
  "png",
  "ravif",
@@ -811,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "compress-images"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -829,7 +842,7 @@ dependencies = [
 
 [[package]]
 name = "compress-images-app"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "compress-core",
  "serde",
@@ -2233,6 +2246,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "image-avif-native"
+version = "0.4.0"
+dependencies = [
+ "image",
+]
+
+[[package]]
 name = "image-webp"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2616,6 +2636,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f554864c5f34c7f285ff6acdcadb64bcc2a3de1609e9135cec702c5edc703864"
 dependencies = [
  "cfg-if",
+ "cmake",
  "libc",
  "system-deps 8.0.0",
  "vcpkg",
@@ -3083,7 +3104,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536"
 dependencies = [
  "bitflags 2.13.2",
+ "block2",
  "dispatch2",
+ "libc",
  "objc2",
 ]
 
@@ -3094,10 +3117,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807"
 dependencies = [
  "bitflags 2.13.2",
+ "block2",
  "dispatch2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
  "objc2-io-surface",
+ "objc2-metal",
 ]
 
 [[package]]
@@ -3161,6 +3187,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "objc2-image-io"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32b0446e98cf4a784cc7a0177715ff317eeaa8463841c616cfc78aa4f953c4ea"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
+]
+
+[[package]]
 name = "objc2-io-surface"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3169,6 +3207,17 @@ dependencies = [
  "bitflags 2.13.2",
  "objc2",
  "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-metal"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0125f776a10d00af4152d74616409f0d4a2053a6f57fa5b7d6aa2854ac04794"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2",
+ "objc2-foundation",
 ]
 
 [[package]]
