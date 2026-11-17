@@ -2,6 +2,7 @@
   import type { ConflictPolicy, Language, OutputFormat, PresetChoice } from "../lib/api";
   import { t, type MessageKey } from "../lib/i18n.svelte";
   import { settings } from "../lib/settings.svelte";
+  import IntegrationCard from "./IntegrationCard.svelte";
 
   let { disabled = false }: { disabled?: boolean } = $props();
 
@@ -134,6 +135,10 @@
       </label>
     </fieldset>
 
+    <div class="bottom">
+      <IntegrationCard />
+    </div>
+
     <label class="field lang">
       <span class="label">{t("settings.language")}</span>
       <select bind:value={s.language} onchange={() => settings.changed()}>
@@ -243,8 +248,11 @@
     gap: 8px;
   }
 
-  .lang {
+  .bottom {
     margin-top: auto;
+  }
+
+  .lang {
     padding-top: 12px;
     border-top: 1px solid var(--border);
   }

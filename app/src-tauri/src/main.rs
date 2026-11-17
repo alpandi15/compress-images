@@ -1,6 +1,7 @@
 // Hide the console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod integrations;
 mod job;
 #[cfg(target_os = "macos")]
 mod mac_single_instance;
@@ -109,6 +110,9 @@ fn main() {
             take_quick_batch,
             show_main_window,
             log_from_ui,
+            integration_status,
+            integration_install,
+            integration_uninstall,
         ])
         .build(context)
         .expect("error while building Compress Images")
@@ -235,4 +239,30 @@ fn log_from_ui(window: tauri::Window, level: String, message: String) {
         "warn" => tracing::warn!(window = w, "ui: {message}"),
         _ => tracing::debug!(window = w, "ui: {message}"),
     }
+}
+
+fn integration_env(app: &AppHandle) -> Result<(PathBuf, PathBuf), String> {
+    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let launcher = integrations::launcher_path().map_err(|e| e.to_string())?;
+    Ok((home, launcher))
+}
+
+#[tauri::command]
+fn integration_status(app: AppHandle) -> Result<integrations::IntegrationStatus, String> {
+    let (home, launcher) = integration_env(&app)?;
+    Ok(integrations::status(&home, &launcher))
+}
+
+#[tauri::command]
+fn integration_install(app: AppHandle) -> Result<integrations::IntegrationStatus, String> {
+    let (home, launcher) = integration_env(&app)?;
+    tracing::debug!(launcher = %launcher.display(), "installing context-menu integration");
+    integrations::install(&home, &launcher)
+}
+
+#[tauri::command]
+fn integration_uninstall(app: AppHandle) -> Result<integrations::IntegrationStatus, String> {
+    let (home, launcher) = integration_env(&app)?;
+    tracing::debug!("removing context-menu integration");
+    integrations::uninstall(&home, &launcher)
 }

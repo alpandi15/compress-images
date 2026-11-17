@@ -31,5 +31,8 @@ tracing-subscriber.workspace = true
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 tauri-plugin-single-instance = "2.5.5"
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56.0"
+
 [dev-dependencies]
 tempfile.workspace = true

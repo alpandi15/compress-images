@@ -241,38 +241,43 @@ Human output lists each processed file with sizes; unsupported (non-image) files
 
 ## 5. OS Integration (context menu)
 
-Integrations are installed **per user** (no admin/root needed) and can be toggled from the GUI. Uninstall must remove everything that install created.
+Integrations are installed **per user** (no admin/root needed) and are managed from the GUI ("Right-click menu" card in Settings: status, add/reinstall, remove). Uninstall removes everything install created. The menu label is the product name, **"Compress Images"**, on every platform (no translation needed). Implementation: `app/src-tauri/src/integrations/`.
+
+Each platform module has a pure generator (unit-tested on all platforms) and an installer whose target location is injected, so tests never touch the developer's real registry or profile. Status reports `installed`, and `outdated` when the entry points at a different copy of the app (moved/reinstalled); "Reinstall" fixes that.
+
+The launched program is the running executable, except for an AppImage, where it is `$APPIMAGE` (the executable lives in a temporary mount that changes every run).
 
 ### 5.1 Windows
 
 - Registry under `HKCU\Software\Classes` (per user):
-  - For each supported extension: `SystemFileAssociations\.<ext>\shell\CompressImages` with `MUIVerb = "Compress image"`, `Icon = "<exe>,0"`, `MultiSelectModel = "Player"` (otherwise Explorer hides the verb when > 15 files are selected), and `command\(Default) = "<exe>" --compress "%1"`.
-  - Folders: `Directory\shell\CompressImages\command` → `"<exe>" --compress "%1"`.
-  - Folder background (right-click empty space inside a folder): `Directory\Background\shell\CompressImages\command` → `"<exe>" --compress "%V"`.
-- Windows 11: these entries appear under **"Show more options"**. A top-level Windows 11 entry (`IExplorerCommand` + sparse package) is planned for v1.0, out of scope before that.
-- The NSIS uninstaller must remove the registry keys.
+  - For each supported extension (`jpg jpeg jfif png webp avif tif tiff bmp heic heif`): `SystemFileAssociations\.<ext>\shell\CompressImages` with `MUIVerb = "Compress Images"`, `Icon = "<exe>",0`, `MultiSelectModel = "Player"` (otherwise Explorer hides the verb when > 15 files are selected), and `command\(Default) = "<exe>" --compress "%1"`.
+  - Folders: `Directory\shell\CompressImages` → `"<exe>" --compress "%1"`.
+  - Folder background (right-click empty space inside a folder): `Directory\Background\shell\CompressImages` → `"<exe>" --compress "%V"`.
+- Explorer starts one process per selected item; single-instance merging (§4.3) turns them into one job.
+- **NSIS installer** (`installMode: currentUser`) registers the entries on install and deletes them on uninstall via `app/src-tauri/windows/hooks.nsh`. That file is generated from the same Rust code (`nsis_hooks()`), and a test fails if it drifts. Reinstalling/updating re-adds the menu even if the user removed it.
+- The `.msi` package has no such hook: users of the MSI add the menu from the GUI, and should remove it from the GUI before uninstalling. (Decide in v0.4 whether to ship the MSI at all.)
+- Windows 11: these entries appear under **"Show more options"**. A top-level Windows 11 entry (`IExplorerCommand` + sparse package) is planned for v1.0.
 
 ### 5.2 macOS
 
-- Install Finder **Quick Actions** (`.workflow` bundles) into `~/Library/Services/`:
-  - "Compress Images", receiving *files or folders* in *Finder*, running a shell script:
-    `"/Applications/Compress Images.app/Contents/MacOS/compress-images-app" --compress "$@"` (path resolved at install time from the running app's location).
-- After install/uninstall, refresh the services cache: `/System/Library/CoreServices/pbs -flush`.
-- Workflow templates live in `integrations/macos/`.
+- A Finder **Quick Action** `~/Library/Services/Compress Images.workflow` (Automator "Run Shell Script", input passed as arguments, Finder only, for `public.image` and `public.folder`).
+- Script: `open -n '<path>.app' --args --compress "$@"`. `open` returns immediately, so there is no spinning gear in the menu bar. The new process forwards to a running instance (§4.3). Unbundled dev builds run the binary directly in the background.
+- After install/uninstall the services cache is refreshed with `/System/Library/CoreServices/pbs -flush`.
+- Usage: right-click → **Quick Actions** → Compress Images.
 
 ### 5.3 Linux
 
-Installed for whichever file managers are detected:
+All files go under `$XDG_DATA_HOME` (default `~/.local/share`):
 
 | File manager | Mechanism | Location |
 |---|---|---|
-| Nautilus (GNOME/Ubuntu default) | `nautilus-python` extension (top-level menu item); fallback: Nautilus script (under "Scripts" submenu) | `~/.local/share/nautilus-python/extensions/compress_images.py` · `~/.local/share/nautilus/scripts/Compress Images` |
-| Dolphin (KDE) | Service menu `.desktop` (must be executable) | `~/.local/share/kio/servicemenus/compress-images.desktop` |
-| Nemo (Cinnamon) | Nemo action | `~/.local/share/nemo/actions/compress-images.nemo_action` |
+| Nautilus (GNOME Files) | Python extension (top-level item), **if** the `nautilus-python` plugin is installed (`…/nautilus/extensions-*/libnautilus-python.so` found); otherwise a Nautilus script (under "Scripts") | `nautilus-python/extensions/compress_images.py` · `nautilus/scripts/Compress Images` |
+| Dolphin (KDE) | Service menu (executable) | `kio/servicemenus/compress-images.desktop` |
+| Nemo (Cinnamon) | Nemo action | `nemo/actions/compress-images.nemo_action` |
 
-- The Nautilus script reads `NAUTILUS_SCRIPT_SELECTED_FILE_PATHS` (newline-separated).
-- The nautilus-python extension requires the `python3-nautilus` package; if missing, install the script fallback and show a hint in the GUI.
-- Templates live in `integrations/linux/`.
+- Dolphin and Nemo files are always written (they do nothing if that file manager isn't installed).
+- The Nautilus script reads `NAUTILUS_SCRIPT_SELECTED_FILE_PATHS` (one path per line), falling back to its arguments, then to the current folder.
+- The extension supports the Nautilus 3 and 4 APIs. Nautilus must be restarted (`nautilus -q`) to load it.
 
 ---
 
@@ -440,7 +445,7 @@ No paid signing before v1.0. The README must document:
 - [x] Closing a window while its job runs cancels the job cleanly first (no half-written temp files).
 
 ### v0.3 — Context-menu integration
-- [ ] Windows registry install/uninstall from the app; macOS Quick Action; Linux Nautilus/Dolphin/Nemo per §5.
+- [x] Windows registry install/uninstall from the app + NSIS hooks; macOS Quick Action; Linux Nautilus/Dolphin/Nemo per §5. *(Verified on macOS: generated plists lint clean and the workflow runs via `automator`, launching quick mode with every selected item as its own argument. The Finder menu was confirmed by hand (right-click → Quick Actions → Compress Images). Windows/Linux file managers still need a manual check.)*
 
 ### v0.4 — Packaging & polish
 - [ ] Release workflow producing all artifacts in §7.2.
@@ -489,5 +494,6 @@ No paid signing before v1.0. The README must document:
 | D-10 | Never-larger rule does not apply to resized images | Accepted (2026-11-12) |
 | D-8 | Bundle identifier `io.github.alpandi15.compress-images` | Accepted (2026-11-12) |
 | D-11 | Own single-instance implementation on macOS (plugin races on simultaneous launches) | Accepted (2026-11-12) |
+| D-12 | NSIS installer registers the Windows context menu automatically; other platforms opt in from the GUI | Accepted (2026-11-12) |
 
 Larger decisions get an ADR in `docs/adr/NNNN-short-title.md` (Context · Decision · Consequences).

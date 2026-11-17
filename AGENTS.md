@@ -68,6 +68,8 @@ If `libheif`/`dav1d` are unavailable, build with `--no-default-features` (HEIC/A
 | Format | `cargo fmt --all` |
 | Run CLI | `cargo run -p compress-images -- -q 70 <path>` |
 | Dry run | `cargo run -p compress-images -- --dry-run <path>` |
+| Regenerate NSIS hooks | `cargo test -p compress-images-app -- --ignored regenerate_nsis_hooks` (after changing Windows registry entries) |
+| Export Quick Action for a manual test | `WORKFLOW_OUT=<dir> WORKFLOW_LAUNCHER=<exe> cargo test -p compress-images-app -- --ignored export_workflow`, then `automator -i <file> "<dir>/Compress Images.workflow"` |
 | Regenerate fixtures | `cargo run -p compress-core --example gen_fixtures` (+ `heif-enc`, see `tests/fixtures/README.md`) |
 | Frontend deps (once) | `cd app && pnpm install` |
 | Frontend type-check | `cd app && pnpm check` |

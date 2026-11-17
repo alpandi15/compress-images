@@ -82,6 +82,13 @@ export type JobMessage =
   | { kind: "planned"; items: PlannedItem[] }
   | { kind: "core"; event: CoreEvent };
 
+export interface IntegrationStatus {
+  supported: boolean;
+  installed: boolean;
+  outdated: boolean;
+  targets: string[];
+}
+
 export const JOB_EVENT = "job";
 export const QUICK_BATCH_EVENT = "quick-batch";
 
@@ -93,6 +100,9 @@ export const api = {
   isJobRunning: () => invoke<boolean>("is_job_running"),
   takeQuickBatch: () => invoke<string[]>("take_quick_batch"),
   showMainWindow: () => invoke<void>("show_main_window"),
+  integrationStatus: () => invoke<IntegrationStatus>("integration_status"),
+  integrationInstall: () => invoke<IntegrationStatus>("integration_install"),
+  integrationUninstall: () => invoke<IntegrationStatus>("integration_uninstall"),
 };
 
 /** Writes to the backend log (visible with RUST_LOG=compress_images_app=debug). */

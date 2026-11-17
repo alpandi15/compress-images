@@ -3,17 +3,27 @@
 Compress images one by one or whole folders at a time, on macOS, Windows and Linux.
 Results go into a `compressed/` folder. **Your originals are never touched.**
 
-> **Status:** v0.2: command-line tool + desktop app (macOS, Windows, Linux). Right-click
-> integration is next (see the [roadmap](docs/SPEC.md#8-roadmap--acceptance-criteria)).
+> **Status:** v0.3: command-line tool, desktop app and right-click menu (macOS, Windows,
+> Linux). Prebuilt downloads are next (see the [roadmap](docs/SPEC.md#8-roadmap--acceptance-criteria)).
 
 ## Desktop app
 
 Drop files or folders onto the window (or use *Add files* / *Add folder*), pick a preset, and
 press **Compress**. Settings are remembered. English and Indonesian UI.
 
-Launching the app with `--compress <paths>` opens a small progress window instead, which is
-what the right-click integration will use. Several launches within half a second are merged
-into one job.
+## Right-click menu
+
+Open **Settings → Right-click menu → Add to menu** (the Windows installer adds it for you).
+
+| OS | Where it appears |
+|---|---|
+| Windows | Right-click an image, a folder, or inside a folder → **Compress Images** (Windows 11: under *Show more options*) |
+| macOS | Finder: right-click → **Quick Actions → Compress Images** (if it's missing, enable it under *Quick Actions → Customize…*) |
+| Linux | Nautilus/Files, Dolphin and Nemo: right-click → **Compress Images** (restart the file manager once, e.g. `nautilus -q`) |
+
+The menu opens a small progress window that closes by itself when done. Selecting several items,
+or clicking the menu again within half a second, merges everything into one job. If you move the
+app, the Settings card shows **Reinstall** to point the menu at the new location.
 
 ## Features
 
